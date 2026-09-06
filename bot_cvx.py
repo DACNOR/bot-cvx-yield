@@ -10,7 +10,7 @@ st.set_page_config(page_title="BOT CVX YIELD • DACNOR", layout="wide", initial
 # Auto-refresco cada 60 segundos
 st_autorefresh(interval=60 * 1000, key="cvx_refresh")
 
-# Estilos de diseño institucional Dark Mode
+# Estilos institucionales Dark Mode
 st.markdown("""
     <style>
     .stApp { background-color: #0b0e14; color: #e1e7ec; }
@@ -54,7 +54,7 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-# --- 1. PRECIOS Y DATOS EN VIVO (Yahoo Finance & RPC) ---
+# --- 1. PRECIOS Y DATOS EN VIVO ---
 try:
     tickers = yf.Tickers("CVX-USD CRV-USD ETH-USD")
     p_cvx = tickers.tickers['CVX-USD'].history(period="1d")['Close'].iloc[-1]
@@ -63,25 +63,34 @@ try:
 except:
     p_cvx, p_crv, p_eth = 2.32, 0.371, 2496.0
 
-# Lectura directa del Gas Base de Mainnet
+# Lectura directa del Gas Total de Mainnet (Base Fee + Tip ~ 0.20 Gwei)
 try:
     rpc_payload = {"jsonrpc":"2.0","method":"eth_gasPrice","params":[],"id":1}
     rpc_res = requests.post("https://cloudflare-eth.com", json=rpc_payload, timeout=3).json()
     gas_wei = int(rpc_res['result'], 16)
-    gas_gwei = max(round(gas_wei / 1e9, 2), 0.05)
+    gas_gwei = max(round(gas_wei / 1e9, 2), 0.20)
 except:
-    gas_gwei = 0.05
+    gas_gwei = 0.20
 
-# --- 2. CÁLCULO DE LA RONDA QUINCENAL AUTOMÁTICA Y RELOJ ---
+# --- 2. DATOS DE LLAMA AIRFORCE & VOTIUM API ---
+ronda_api = 130
+bribe_real_api = 0.00872
+total_bribes_usd = 286950.0
+total_votes_cvx = 32890000.0
+
+try:
+    la_res = requests.get("https://api.llama.airforce/dashboard/bribes-overview-votium", timeout=4).json()
+    epochs = la_res.get('dashboard', {}).get('epochs', [])
+    if epochs:
+        last_epoch = epochs[-1]
+        ronda_api = int(last_epoch.get('round', 130))
+        total_bribes_usd = float(last_epoch.get('totalAmountDollars', 286950))
+        bribe_real_api = float(last_epoch.get('dollarPerVlAsset', 0.00872))
+except:
+    pass
+
+# --- 3. RELOJ DE CIERRE QUINCENAL (Miércoles 23:59 UTC) ---
 now = datetime.now(timezone.utc)
-
-# Sincronización oficial de épocas quincenales (Ronda #129 inició el 12 de Agosto 2026)
-base_round_date = datetime(2026, 8, 12, 0, 0, tzinfo=timezone.utc)
-ronda_base = 129
-diff_quincenas = int((now - base_round_date).total_seconds() // (14 * 86400))
-ronda_actual = ronda_base + diff_quincenas
-
-# Próximo cierre quincenal: Miércoles a las 23:59 UTC
 dias_hasta_miercoles = (2 - now.weekday()) % 7
 if dias_hasta_miercoles == 0 and (now.hour > 23 or (now.hour == 23 and now.minute >= 59)):
     dias_hasta_miercoles = 7
@@ -92,16 +101,16 @@ total_segundos = max(int(tiempo_restante.total_seconds()), 0)
 horas_restantes = total_segundos // 3600
 minutos_restantes = (total_segundos % 3600) // 60
 
-# --- CABECERA SUPERIOR ---
+# --- CABECERA SUPERIOR CON LA LLAMA ANIMAL 🦙 ---
 c_title, c_assets = st.columns([1.3, 2.7])
 with c_title:
     st.markdown("""
         <div style="display:flex; align-items:center;">
-            <h1 style='margin:0; padding:0; font-size:30px; font-weight:900; color:#f0f6fc;'>🔥 BOT CVX YIELD</h1>
+            <h1 style='margin:0; padding:0; font-size:30px; font-weight:900; color:#f0f6fc;'>🦙 BOT CVX YIELD</h1>
             <span class="brand-badge">BY DACNOR</span>
         </div>
     """, unsafe_allow_html=True)
-    st.markdown(f"<span style='color:#8b949e; font-size:13px;'>The Union Llama • Curve Wars Engine • Ronda #{ronda_actual}</span>", unsafe_allow_html=True)
+    st.markdown(f"<span style='color:#8b949e; font-size:13px;'>Llama AirForce • The Union • Ronda #{ronda_api}</span>", unsafe_allow_html=True)
 
 with c_assets:
     st.markdown(f"""
@@ -118,10 +127,18 @@ st.markdown("<div style='height: 18px;'></div>", unsafe_allow_html=True)
 
 # --- SIDEBAR: SIMULADOR DE CARTERA PERSONAL ---
 st.sidebar.markdown("<h3 style='color:#f0f6fc;'>💼 Tu Posición vlCVX</h3>", unsafe_allow_html=True)
-user_cvx = st.sidebar.number_input("Cantidad de CVX bloqueados:", min_value=0.0, value=2500.0, step=100.0)
-lock_date = st.sidebar.date_input("Fecha en que firmaste el bloqueo:", value=datetime.today() - timedelta(days=35))
+user_cvx = st.sidebar.number_input("Cantidad de CVX bloqueados:", min_value=0.0, value=200.0, step=10.0)
+lock_date = st.sidebar.date_input("Fecha en que firmaste el bloqueo:", value=datetime(2026, 8, 2))
 claim_pool_usd = st.sidebar.number_input("scrvUSD acumulado en The Union ($):", min_value=0.0, value=1400.0, step=10.0)
-bribe_input = st.sidebar.number_input("Soborno estimado ($/vlCVX quincenal):", min_value=0.01, value=0.052, step=0.005, format="%.3f")
+
+bribe_input = st.sidebar.number_input(
+    "Soborno ($/vlCVX quincenal):", 
+    min_value=0.0001, 
+    value=float(bribe_real_api), 
+    step=0.001, 
+    format="%.5f",
+    help="Extraído en vivo de la última ronda de Llama Airforce."
+)
 
 # Cálculos institucionales
 total_vecrv = user_cvx * 8.75
@@ -141,26 +158,26 @@ with col1:
     st.markdown(f"""
         <div class="card-box">
             <div>
-                <div class="card-title">1. RELOJ & RETORNO • RONDA #{ronda_actual}</div>
+                <div class="card-title">1. RELOJ & RETORNO • RONDA #{ronda_api}</div>
                 <div class="card-metric" style="color:#58a6ff;">{horas_restantes}h {minutos_restantes}m</div>
-                <div class="card-sub">Cierre de ronda quincenal (Miércoles 23:59 UTC)</div>
+                <div class="card-sub">Cierre quincenal (Miércoles 23:59 UTC)</div>
             </div>
             <div>
                 <hr style="border:none; border-top:1px solid #232936; margin:12px 0;">
                 <div style="font-size:14px; margin-bottom:6px;">
-                    <span style="color:#8b949e;">Rendimiento Real por Voto:</span> 
-                    <span style="font-weight:700; color:#ffffff;">${bribe_input:.3f} / vlCVX</span>
+                    <span style="color:#8b949e;">Soborno Real Llama:</span> 
+                    <span style="font-weight:700; color:#ffffff;">${bribe_input:.5f} / vlCVX</span>
                 </div>
                 <div style="font-size:14px; margin-bottom:6px;">
                     <span style="color:#8b949e;">APR Real de Bribes:</span> 
-                    <span style="font-weight:700; color:#3fb950;">~{apr_estimado:.1f}% anual</span>
+                    <span style="font-weight:700; color:#3fb950;">~{apr_estimado:.2f}% anual</span>
                 </div>
                 <div style="font-size:14px;">
-                    <span style="color:#8b949e;">Estimado por quincena:</span> 
+                    <span style="color:#8b949e;">Tu retorno esta quincena:</span> 
                     <span style="font-weight:700; color:#e3b341;">+${ingreso_quincenal_est:,.2f} en scrvUSD</span>
                 </div>
                 <div class="card-sub" style="margin-top:8px; font-size:11px;">
-                    ⚠️ Evita dilución: votos masivos entran en los últimos 30 min.
+                    Total bolsa ronda: ${total_bribes_usd:,.0f} repartidos.
                 </div>
             </div>
         </div>
