@@ -2,7 +2,7 @@ import streamlit as st
 import requests
 import pandas as pd
 import yfinance as yf
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from streamlit_autorefresh import st_autorefresh
 
 st.set_page_config(page_title="BOT DAC CVX YIELD", layout="wide", initial_sidebar_state="expanded")
@@ -35,8 +35,6 @@ st.markdown("""
         font-size: 14px;
         font-weight: 700;
     }
-    .badge-ok { color: #3fb950; font-weight: 700; }
-    .badge-alert { color: #f85149; font-weight: 700; }
     </style>
 """, unsafe_allow_html=True)
 
@@ -49,22 +47,25 @@ try:
 except:
     p_cvx, p_crv, p_eth = 2.30, 0.35, 2500.0
 
-# Gas aproximado de Mainnet (vía beacon/etherscan fallback)
+# Gas aproximado de Mainnet
 try:
     gas_res = requests.get("https://api.blocknative.com/gasprices/blockprices", timeout=3).json()
-    gas_gwei = gas_res['blockPrices'][0]['estimatedPrices'][0]['price']
+    gas_gwei = float(gas_res['blockPrices'][0]['estimatedPrices'][0]['price'])
 except:
-    gas_gwei = 6.0 # Nivel habitual post-Dencun
+    gas_gwei = 6.0
 
 # --- 2. CÁLCULO DE LA RONDA QUINCENAL (Reloj Votium / Convex) ---
-# Convex vota cada 2 semanas; el cierre es los miércoles a las 23:59 UTC
-now = datetime.utcnow()
+# Miércoles es weekday 2. Cierre 23:59 UTC.
+now = datetime.now(timezone.utc)
 dias_hasta_miercoles = (2 - now.weekday()) % 7
-if dias_hasta_miercoles == 0 and now.hour >= 23 and now.minute >= 50:
+if dias_hasta_miercoles == 0 and (now.hour > 23 or (now.hour == 23 and now.minute >= 59)):
     dias_hasta_miercoles = 7
-next_close = datetime(now.year, now.month, now.day) + timedelta(days=dias_hasta_miercoles, hours=23, minutes=59) - timedelta(hours=now.hour, minutes=now.minute)
-horas_restantes = int(next_close.total_seconds() // 3600)
-minutos_restantes = int((next_close.total_seconds() % 3600) // 60)
+
+fecha_cierre = datetime(now.year, now.month, now.day, 23, 59, tzinfo=timezone.utc) + timedelta(days=dias_hasta_miercoles)
+tiempo_restante = fecha_cierre - now
+total_segundos = max(int(tiempo_restante.total_seconds()), 0)
+horas_restantes = total_segundos // 3600
+minutos_restantes = (total_segundos % 3600) // 60
 
 # --- CABECERA SUPERIOR ---
 c_title, c_assets = st.columns([1.2, 2.8])
@@ -93,8 +94,8 @@ claim_pool_usd = st.sidebar.number_input("scrvUSD acumulado en The Union ($):", 
 
 # Cálculos de posición según la tesis de Dimitri
 total_vecrv = user_cvx * 8.75 # 1 vlCVX comanda ~8.75 veCRV
-unlock_date = datetime.combine(lock_date, datetime.min.time()) + timedelta(weeks=16)
-dias_restantes_lock = max((unlock_date - datetime.utcnow()).days, 0)
+unlock_date = datetime.combine(lock_date, datetime.min.time(), tzinfo=timezone.utc) + timedelta(weeks=16)
+dias_restantes_lock = max((unlock_date - now).days, 0)
 semanas_restantes_lock = dias_restantes_lock // 7
 rondas_restantes = max(dias_restantes_lock // 14, 0)
 
@@ -151,14 +152,12 @@ with col2:
 
 # 3. EL SEMÁFORO DE GAS Y COSECHA (THE UNION / MAINNET)
 with col3:
-    # Coste estimado de ejecutar Claim en The Union (~140,000 gas units)
     gas_units_claim = 140000
     coste_claim_eth = (gas_units_claim * (gas_gwei * 1e-9))
     coste_claim_usd = coste_claim_eth * p_eth
     
     pct_impacto = (coste_claim_usd / claim_pool_usd * 100) if claim_pool_usd > 0 else 100
     
-    # Regla de eficiencia de Dimitri
     puede_cosechar = pct_impacto <= 2.5 and gas_gwei <= 15.0
     color_sem = "#3fb950" if puede_cosechar else "#f85149"
     txt_sem = "🟢 VENTANA ÓPTIMA DE CLAIM" if puede_cosechar else "🔴 PROHIBIDO COSECHAR (ACUMULA)"
