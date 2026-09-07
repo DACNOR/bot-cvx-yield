@@ -5,21 +5,20 @@ import yfinance as yf
 from datetime import datetime, timedelta, timezone
 from streamlit_autorefresh import st_autorefresh
 
-st.set_page_config(page_title="BOT CVX YIELD • DACNOR", layout="wide", initial_sidebar_state="expanded")
+st.set_page_config(page_title="BOT CVX YIELD • DACNOR", layout="wide", initial_sidebar_state="collapsed")
 
 # Auto-refresco cada 60 segundos
 st_autorefresh(interval=60 * 1000, key="cvx_refresh")
 
-# Estilos institucionales Dark Mode
+# Estilos institucionales Dark Mode (Barra superior oculta, sin perder controles)
 st.markdown("""
     <style>
-    /* Ocultar toda la barra superior de Streamlit (GitHub, lápiz, estrella, Share) */
-    header[data-testid="stHeader"] {
-        display: none !important;
-    }
+    /* Ocultar barra superior de Streamlit */
+    header[data-testid="stHeader"] { display: none !important; }
 
     .stApp { background-color: #0b0e14; color: #e1e7ec; }
-    .block-container { padding-top: 1.8rem !important; max-width: 96% !important; }
+    .block-container { padding-top: 1.5rem !important; max-width: 96% !important; }
+    
     .card-box {
         background-color: #131722;
         border-radius: 12px;
@@ -56,6 +55,13 @@ st.markdown("""
         margin-left: 8px;
         border: 1px solid #2f3b4f;
     }
+    /* Estilo del cajón de configuración */
+    div[data-testid="stExpander"] {
+        background-color: #131722 !important;
+        border: 1px solid #232936 !important;
+        border-radius: 10px !important;
+        margin-bottom: 20px !important;
+    }
     </style>
 """, unsafe_allow_html=True)
 
@@ -81,7 +87,6 @@ except:
 ronda_api = 130
 bribe_real_api = 0.00872
 total_bribes_usd = 286950.0
-total_votes_cvx = 32890000.0
 
 try:
     la_res = requests.get("https://api.llama.airforce/dashboard/bribes-overview-votium", timeout=4).json()
@@ -106,7 +111,7 @@ total_segundos = max(int(tiempo_restante.total_seconds()), 0)
 horas_restantes = total_segundos // 3600
 minutos_restantes = (total_segundos % 3600) // 60
 
-# --- CABECERA SUPERIOR CON LA LLAMA ANIMAL 🦙 ---
+# --- CABECERA SUPERIOR ---
 c_title, c_assets = st.columns([1.3, 2.7])
 with c_title:
     st.markdown("""
@@ -128,22 +133,19 @@ with c_assets:
         </div>
     """, unsafe_allow_html=True)
 
-st.markdown("<div style='height: 18px;'></div>", unsafe_allow_html=True)
+st.markdown("<div style='height: 12px;'></div>", unsafe_allow_html=True)
 
-# --- SIDEBAR: SIMULADOR DE CARTERA PERSONAL ---
-st.sidebar.markdown("<h3 style='color:#f0f6fc;'>💼 Tu Posición vlCVX</h3>", unsafe_allow_html=True)
-user_cvx = st.sidebar.number_input("Cantidad de CVX bloqueados:", min_value=0.0, value=200.0, step=10.0)
-lock_date = st.sidebar.date_input("Fecha en que firmaste el bloqueo:", value=datetime(2026, 8, 2))
-claim_pool_usd = st.sidebar.number_input("scrvUSD acumulado en The Union ($):", min_value=0.0, value=1400.0, step=10.0)
-
-bribe_input = st.sidebar.number_input(
-    "Soborno ($/vlCVX quincenal):", 
-    min_value=0.0001, 
-    value=float(bribe_real_api), 
-    step=0.001, 
-    format="%.5f",
-    help="Extraído en vivo de la última ronda de Llama Airforce."
-)
+# --- PANEL DE CONFIGURACIÓN INTEGRADO (ACCESIBLE SIEMPRE) ---
+with st.expander("⚙️ AJUSTAR MI POSICIÓN PERSONAL (vlCVX, Fechas & The Union)", expanded=False):
+    exp_c1, exp_c2, exp_c3, exp_c4 = st.columns(4)
+    with exp_c1:
+        user_cvx = st.number_input("Cantidad de CVX bloqueados:", min_value=0.0, value=200.0, step=10.0)
+    with exp_c2:
+        lock_date = st.date_input("Fecha en que firmaste el bloqueo:", value=datetime(2026, 8, 2))
+    with exp_c3:
+        claim_pool_usd = st.number_input("scrvUSD en The Union ($):", min_value=0.0, value=1400.0, step=10.0)
+    with exp_c4:
+        bribe_input = st.number_input("Soborno ($/vlCVX quincenal):", min_value=0.0001, value=float(bribe_real_api), step=0.001, format="%.5f")
 
 # Cálculos institucionales
 total_vecrv = user_cvx * 8.75
