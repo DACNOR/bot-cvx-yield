@@ -12,8 +12,12 @@ st_autorefresh(interval=60 * 1000, key="cvx_refresh")
 
 # Estilos institucionales Dark Mode
 st.markdown("""
-    </style>
-""", unsafe_allow_html=True)
+    <style>
+    /* Ocultar toda la barra superior de Streamlit (GitHub, lápiz, estrella, Share) */
+    header[data-testid="stHeader"] {
+        display: none !important;
+    }
+
     .stApp { background-color: #0b0e14; color: #e1e7ec; }
     .block-container { padding-top: 1.8rem !important; max-width: 96% !important; }
     .card-box {
