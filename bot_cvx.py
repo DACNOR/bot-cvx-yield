@@ -13,6 +13,12 @@ st_autorefresh(interval=60 * 1000, key="cvx_refresh")
 # Estilos institucionales Dark Mode
 st.markdown("""
     <style>
+    /* Ocultar toda la barra superior */
+    header[data-testid="stHeader"] {
+        display: none !important;
+    }
+    </style>
+""", unsafe_allow_html=True)
     .stApp { background-color: #0b0e14; color: #e1e7ec; }
     .block-container { padding-top: 1.8rem !important; max-width: 96% !important; }
     .card-box {
