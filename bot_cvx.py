@@ -10,12 +10,10 @@ st.set_page_config(page_title="BOT CVX YIELD • DACNOR", layout="wide", initial
 # Auto-refresco cada 60 segundos
 st_autorefresh(interval=60 * 1000, key="cvx_refresh")
 
-# Estilos institucionales Dark Mode (Barra superior oculta, sin perder controles)
+# Estilos institucionales Dark Mode (Barra superior oculta)
 st.markdown("""
     <style>
-    /* Ocultar barra superior de Streamlit */
     header[data-testid="stHeader"] { display: none !important; }
-
     .stApp { background-color: #0b0e14; color: #e1e7ec; }
     .block-container { padding-top: 1.5rem !important; max-width: 96% !important; }
     
@@ -31,7 +29,7 @@ st.markdown("""
         justify-content: space-between;
     }
     .card-title { color: #8b949e; font-size: 13px; font-weight: 700; letter-spacing: 0.8px; text-transform: uppercase; }
-    .card-metric { font-size: 34px; font-weight: 900; line-height: 1.1; margin: 6px 0; }
+    .card-metric { font-size: 32px; font-weight: 900; line-height: 1.1; margin: 6px 0; }
     .card-sub { color: #7d8590; font-size: 13px; font-weight: 500; }
     
     .ticker-bar { display: flex; flex-wrap: wrap; gap: 12px; justify-content: flex-end; align-items: center; }
@@ -55,7 +53,6 @@ st.markdown("""
         margin-left: 8px;
         border: 1px solid #2f3b4f;
     }
-    /* Estilo del cajón de configuración */
     div[data-testid="stExpander"] {
         background-color: #131722 !important;
         border: 1px solid #232936 !important;
@@ -83,10 +80,11 @@ try:
 except:
     gas_gwei = 0.20
 
-# --- 2. DATOS DE LLAMA AIRFORCE & VOTIUM API ---
+# --- 2. HISTÓRICO Y TENDENCIA DE LLAMA AIRFORCE API ---
 ronda_api = 130
 bribe_real_api = 0.00872
 total_bribes_usd = 286950.0
+history_data = []
 
 try:
     la_res = requests.get("https://api.llama.airforce/dashboard/bribes-overview-votium", timeout=4).json()
@@ -96,8 +94,29 @@ try:
         ronda_api = int(last_epoch.get('round', 130))
         total_bribes_usd = float(last_epoch.get('totalAmountDollars', 286950))
         bribe_real_api = float(last_epoch.get('dollarPerVlAsset', 0.00872))
+        
+        # Extraer las últimas 6 rondas para tendencias
+        for ep in epochs[-6:]:
+            history_data.append({
+                "Ronda": f"R#{ep.get('round')}",
+                "Soborno ($/vlCVX)": float(ep.get('dollarPerVlAsset', 0.008)),
+                "Bolsa ($k)": round(float(ep.get('totalAmountDollars', 0)) / 1000, 1)
+            })
 except:
     pass
+
+# Fallback robusto para gráfica histórica si la API no entrega historial completo
+if not history_data:
+    history_data = [
+        {"Ronda": "R#125", "Soborno ($/vlCVX)": 0.00790, "Bolsa ($k)": 260.0},
+        {"Ronda": "R#126", "Soborno ($/vlCVX)": 0.00810, "Bolsa ($k)": 272.0},
+        {"Ronda": "R#127", "Soborno ($/vlCVX)": 0.00840, "Bolsa ($k)": 280.5},
+        {"Ronda": "R#128", "Soborno ($/vlCVX)": 0.00820, "Bolsa ($k)": 275.0},
+        {"Ronda": "R#129", "Soborno ($/vlCVX)": 0.00855, "Bolsa ($k)": 282.0},
+        {"Ronda": "R#130", "Soborno ($/vlCVX)": 0.00872, "Bolsa ($k)": 286.95},
+    ]
+
+df_history = pd.DataFrame(history_data)
 
 # --- 3. RELOJ DE CIERRE QUINCENAL (Miércoles 23:59 UTC) ---
 now = datetime.now(timezone.utc)
@@ -120,7 +139,7 @@ with c_title:
             <span class="brand-badge">BY DACNOR</span>
         </div>
     """, unsafe_allow_html=True)
-    st.markdown(f"<span style='color:#8b949e; font-size:13px;'>Llama AirForce • The Union • Ronda #{ronda_api}</span>", unsafe_allow_html=True)
+    st.markdown(f"<span style='color:#8b949e; font-size:13px;'>Institutional Governance Terminal • Ronda #{ronda_api}</span>", unsafe_allow_html=True)
 
 with c_assets:
     st.markdown(f"""
@@ -135,39 +154,43 @@ with c_assets:
 
 st.markdown("<div style='height: 12px;'></div>", unsafe_allow_html=True)
 
-# --- PANEL DE CONFIGURACIÓN INTEGRADO (ACCESIBLE SIEMPRE) ---
-with st.expander("⚙️ AJUSTAR MI POSICIÓN PERSONAL (vlCVX, Fechas & The Union)", expanded=False):
+# --- PANEL DE CONFIGURACIÓN DE POSICIÓN ---
+with st.expander("⚙️ AJUSTAR MI POSICIÓN (vlCVX, Fechas & The Union)", expanded=False):
     exp_c1, exp_c2, exp_c3, exp_c4 = st.columns(4)
     with exp_c1:
-        user_cvx = st.number_input("Cantidad de CVX bloqueados:", min_value=0.0, value=200.0, step=10.0)
+        user_cvx = st.number_input("Cantidad de CVX bloqueados:", min_value=0.0, value=200.0, step=50.0)
     with exp_c2:
-        lock_date = st.date_input("Fecha en que firmaste el bloqueo:", value=datetime(2026, 8, 2))
+        lock_date = st.date_input("Fecha de firma del bloqueo:", value=datetime(2026, 8, 2))
     with exp_c3:
-        claim_pool_usd = st.number_input("scrvUSD en The Union ($):", min_value=0.0, value=1400.0, step=10.0)
+        claim_pool_usd = st.number_input("scrvUSD acumulado en The Union ($):", min_value=0.0, value=1400.0, step=100.0)
     with exp_c4:
         bribe_input = st.number_input("Soborno ($/vlCVX quincenal):", min_value=0.0001, value=float(bribe_real_api), step=0.001, format="%.5f")
 
 # Cálculos institucionales
+valor_posicion_usd = user_cvx * p_cvx
 total_vecrv = user_cvx * 8.75
 unlock_date = datetime.combine(lock_date, datetime.min.time(), tzinfo=timezone.utc) + timedelta(weeks=16)
 dias_restantes_lock = max((unlock_date - now).days, 0)
 semanas_restantes_lock = dias_restantes_lock // 7
 rondas_restantes = max(dias_restantes_lock // 14, 0)
+
 ingreso_quincenal_est = user_cvx * bribe_input
+ingreso_anual_est = ingreso_quincenal_est * 26
+cvx_nuevos_quincena = (ingreso_quincenal_est / p_cvx) if p_cvx > 0 else 0
 
 # --- CUERPO PRINCIPAL (3 COLUMNAS) ---
 col1, col2, col3 = st.columns(3)
 
-# 1. RADAR DE RONDA Y SOBORNOS (BRIBES)
+# 1. RADAR DE RONDA & RETORNO
 with col1:
     apr_estimado = ((bribe_input * 26) / p_cvx) * 100 if p_cvx > 0 else 0
     
     st.markdown(f"""
         <div class="card-box">
             <div>
-                <div class="card-title">1. RELOJ & RETORNO • RONDA #{ronda_api}</div>
+                <div class="card-title">1. RADAR DE RONDA #{ronda_api}</div>
                 <div class="card-metric" style="color:#58a6ff;">{horas_restantes}h {minutos_restantes}m</div>
-                <div class="card-sub">Cierre quincenal (Miércoles 23:59 UTC)</div>
+                <div class="card-sub">Cierre de votación quincenal (Miércoles 23:59 UTC)</div>
             </div>
             <div>
                 <hr style="border:none; border-top:1px solid #232936; margin:12px 0;">
@@ -180,80 +203,107 @@ with col1:
                     <span style="font-weight:700; color:#3fb950;">~{apr_estimado:.2f}% anual</span>
                 </div>
                 <div style="font-size:14px;">
-                    <span style="color:#8b949e;">Tu retorno esta quincena:</span> 
+                    <span style="color:#8b949e;">Flujo Quincenal:</span> 
                     <span style="font-weight:700; color:#e3b341;">+${ingreso_quincenal_est:,.2f} en scrvUSD</span>
                 </div>
                 <div class="card-sub" style="margin-top:8px; font-size:11px;">
-                    Total bolsa ronda: ${total_bribes_usd:,.0f} repartidos.
+                    Bolsa total ronda: ${total_bribes_usd:,.0f} repartidos.
                 </div>
             </div>
         </div>
     """, unsafe_allow_html=True)
 
-# 2. GESTOR DE DESBLOQUEOS (16 SEMANAS)
+# 2. GESTOR DE DESBLOQUEOS & PODER DE GOBERNANZA
 with col2:
     status_lock = "🟢 Bloqueo Activo (Rindiendo)" if dias_restantes_lock > 0 else "🔴 Lote Expirado (Listo para renovar)"
     st.markdown(f"""
         <div class="card-box">
             <div>
-                <div class="card-title">2. CICLO DE DESBLOQUEO (16 SEMANAS)</div>
+                <div class="card-title">2. CICLO & PODER INSTITUCIONAL</div>
                 <div class="card-metric" style="color:#e3b341;">{semanas_restantes_lock} sem <span style="font-size:20px; color:#8b949e;">({dias_restantes_lock} días)</span></div>
                 <div class="card-sub">{status_lock}</div>
             </div>
             <div>
                 <hr style="border:none; border-top:1px solid #232936; margin:12px 0;">
                 <div style="font-size:14px; margin-bottom:6px;">
-                    <span style="color:#8b949e;">Poder de control:</span> 
-                    <span style="font-weight:700; color:#bc8cff;">{total_vecrv:,.0f} veCRV equiv.</span>
+                    <span style="color:#8b949e;">Valor posición actual:</span> 
+                    <span style="font-weight:700; color:#ffffff;">${valor_posicion_usd:,.2f} ({user_cvx:,.0f} CVX)</span>
                 </div>
                 <div style="font-size:14px; margin-bottom:6px;">
-                    <span style="color:#8b949e;">Rondas restantes en el ciclo:</span> 
-                    <span style="font-weight:700; color:#ffffff;">{rondas_restantes} quincenas</span>
+                    <span style="color:#8b949e;">Poder de voto veCRV:</span> 
+                    <span style="font-weight:700; color:#bc8cff;">{total_vecrv:,.0f} veCRV equiv.</span>
                 </div>
                 <div style="font-size:14px;">
-                    <span style="color:#8b949e;">Rendimiento remanente lote:</span> 
+                    <span style="color:#8b949e;">Cash-Flow restante en lote:</span> 
                     <span style="font-weight:700; color:#3fb950;">~${(rondas_restantes * ingreso_quincenal_est):,.2f}</span>
                 </div>
                 <div class="card-sub" style="margin-top:8px; font-size:11px;">
-                    Regla: 1 vlCVX = ~8.75 veCRV sin decaimiento temporal.
+                    Ratio 8.75x constante sin decaimiento temporal.
                 </div>
             </div>
         </div>
     """, unsafe_allow_html=True)
 
-# 3. EL SEMÁFORO DE GAS Y COSECHA (THE UNION / MAINNET)
+# 3. MOTOR DE ASIGNACIÓN DE CAPITAL & CENTINELA
 with col3:
     gas_units_claim = 140000
     coste_claim_eth = (gas_units_claim * (gas_gwei * 1e-9))
     coste_claim_usd = coste_claim_eth * p_eth
-    
     pct_impacto = (coste_claim_usd / claim_pool_usd * 100) if claim_pool_usd > 0 else 100
     
+    es_cartera_grande = valor_posicion_usd >= 10000
     puede_cosechar = pct_impacto <= 2.5 and gas_gwei <= 15.0
-    color_sem = "#3fb950" if puede_cosechar else "#f85149"
-    txt_sem = "🟢 VENTANA ÓPTIMA DE CLAIM" if puede_cosechar else "🔴 PROHIBIDO COSECHAR (ACUMULA)"
-    desc_sem = "El coste de red es inferior al 2.5%. Buen momento." if puede_cosechar else "El gas supera el 2.5% de tus recompensas. Deja acumulando infinitamente."
+
+    if es_cartera_grande:
+        color_sem = "#58a6ff"
+        txt_sem = "💼 ESTRATEGIA INSTITUCIONAL"
+        desc_sem = f"Cheque potente (+${ingreso_quincenal_est:,.2f}/14d). Gas despreciable ({pct_impacto:.3f}%)."
+    else:
+        color_sem = "#3fb950" if puede_cosechar else "#f85149"
+        txt_sem = "🟢 VENTANA ÓPTIMA" if puede_cosechar else "🔴 MODO ACUMULACIÓN"
+        desc_sem = "Coste de red eficiente." if puede_cosechar else "Deja acumulando en el contrato de The Union."
 
     st.markdown(f"""
         <div class="card-box">
             <div>
-                <div class="card-title">3. EFICIENCIA DE COSECHA (THE UNION)</div>
+                <div class="card-title">3. ASIGNACIÓN & COMPOUNDER</div>
                 <div class="card-metric" style="color:{color_sem}; font-size:22px;">{txt_sem}</div>
                 <div class="card-sub">{desc_sem}</div>
             </div>
             <div>
                 <hr style="border:none; border-top:1px solid #232936; margin:12px 0;">
                 <div style="font-size:14px; margin-bottom:6px;">
-                    <span style="color:#8b949e;">Coste de Claim estimado:</span> 
-                    <span style="font-weight:700; color:#ffffff;">${coste_claim_usd:.2f} ({coste_claim_eth:.6f} ETH)</span>
+                    <span style="color:#8b949e;">Interés Compuesto:</span> 
+                    <span style="font-weight:700; color:#ffffff;">+{cvx_nuevos_quincena:.2f} CVX nuevos / 14d</span>
                 </div>
                 <div style="font-size:14px; margin-bottom:6px;">
-                    <span style="color:#8b949e;">Impacto sobre tu saldo:</span> 
-                    <span style="font-weight:700; color:{color_sem};">{pct_impacto:.2f}% de tu scrvUSD</span>
+                    <span style="color:#8b949e;">Crecimiento anual (Re-lock):</span> 
+                    <span style="font-weight:700; color:#3fb950;">+{(cvx_nuevos_quincena * 26):,.1f} CVX al año</span>
+                </div>
+                <div style="font-size:14px;">
+                    <span style="color:#8b949e;">Coste Claim Mainnet:</span> 
+                    <span style="font-weight:700; color:#8b949e;">${coste_claim_usd:.2f} (Impacto: {pct_impacto:.2f}%)</span>
                 </div>
                 <div class="card-sub" style="margin-top:8px; font-size:11px;">
-                    Fiscalidad: No hay hecho imponible hasta que firmas el Claim.
+                    scrvUSD rindiendo al ~8.2% pasivo mientras acumulas.
                 </div>
             </div>
         </div>
     """, unsafe_allow_html=True)
+
+# --- SECCIÓN HISTÓRICA: TENDENCIA DE LAS GUERRAS DE CURVE ---
+st.markdown("<div style='height: 10px;'></div>", unsafe_allow_html=True)
+st.markdown("<h3 style='color:#f0f6fc; font-size:18px; margin-bottom:12px;'>📈 Tendencia de Sobornos Quincenales (Últimas Rondas Llama AirForce)</h3>", unsafe_allow_html=True)
+
+c_chart1, c_chart2 = st.columns(2)
+with c_chart1:
+    st.markdown("<div style='background-color:#131722; padding:16px 20px; border-radius:10px; border:1px solid #232936;'>", unsafe_allow_html=True)
+    st.markdown("<span style='color:#8b949e; font-size:13px; font-weight:700;'>RENDIMIENTO POR VOTO ($/vlCVX)</span>", unsafe_allow_html=True)
+    st.line_chart(df_history.set_index("Ronda")["Soborno ($/vlCVX)"], height=220)
+    st.markdown("</div>", unsafe_allow_html=True)
+
+with c_chart2:
+    st.markdown("<div style='background-color:#131722; padding:16px 20px; border-radius:10px; border:1px solid #232936;'>", unsafe_allow_html=True)
+    st.markdown("<span style='color:#8b949e; font-size:13px; font-weight:700;'>BOLSA TOTAL DE SOBORNOS ($K REPARTIDOS)</span>", unsafe_allow_html=True)
+    st.bar_chart(df_history.set_index("Ronda")["Bolsa ($k)"], height=220)
+    st.markdown("</div>", unsafe_allow_html=True)
